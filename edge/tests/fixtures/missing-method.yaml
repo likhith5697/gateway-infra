@@ -1,0 +1,15 @@
+routes:
+  - name: orders-list
+    path: /orders
+    method: GET
+    namespace: orders
+    service: orders
+    port: 8080
+    auth: custom
+
+  - name: no-method          # <- method missing
+    path: /orders/{id}
+    namespace: orders
+    service: orders
+    port: 8080
+    auth: custom

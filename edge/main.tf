@@ -1,5 +1,17 @@
 locals {
-  routes = yamldecode(file(var.routes_file)).routes
+  routes_raw = yamldecode(file(var.routes_file)).routes
+
+  # Every route must have all 7 fields, non-empty. Checked with try() so a missing field gives a clear
+  # precondition error (below) instead of a type-conversion crash inside the module.
+  route_fields = ["name", "path", "method", "namespace", "service", "port", "auth"]
+  routes_complete = alltrue([
+    for r in local.routes_raw : alltrue([
+      for f in local.route_fields : try(r[f] != null && tostring(r[f]) != "", false)
+    ])
+  ])
+
+  # Incomplete file -> the module gets NO routes (and the precondition fails the plan).
+  routes = local.routes_complete ? local.routes_raw : []
 }
 
 data "aws_vpc" "this" {
@@ -25,7 +37,11 @@ resource "aws_apigatewayv2_stage" "default" {
   }
 
   lifecycle {
-    # Defense in depth: CI's validator already rejects auth "none"; refuse it here too.
+    # Defense in depth: CI's validator already enforces these; refuse them here too.
+    precondition {
+      condition     = local.routes_complete
+      error_message = "Every route in ${var.routes_file} needs non-empty name, path, method, namespace, service, port and auth (run validate_routes.py)."
+    }
     precondition {
       condition     = alltrue([for r in local.routes : r.auth == "custom"])
       error_message = "Every route in ${var.routes_file} must use auth: custom (run validate_routes.py)."

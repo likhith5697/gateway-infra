@@ -1,0 +1,25 @@
+# Snapshot of routes-repo/routes.yaml (kept here so tests don't change when routes-repo does)
+routes:
+  - name: orders-create
+    path: /orders
+    method: POST
+    namespace: orders
+    service: orders
+    port: 8080
+    auth: custom
+
+  - name: orders-list
+    path: /orders
+    method: GET
+    namespace: orders
+    service: orders
+    port: 8080
+    auth: custom
+
+  - name: orders-get
+    path: /orders/{id}
+    method: GET
+    namespace: orders
+    service: orders
+    port: 8080
+    auth: custom

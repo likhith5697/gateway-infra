@@ -18,6 +18,16 @@ output "route_keys" {
   value       = module.routes.route_keys
 }
 
+output "route_ids" {
+  description = "Route name => API Gateway route ID."
+  value       = module.routes.route_ids
+}
+
+output "integration_ids" {
+  description = "Route name => API Gateway integration ID."
+  value       = module.routes.integration_ids
+}
+
 output "authorizer_function_name" {
   value = aws_lambda_function.authorizer.function_name
 }

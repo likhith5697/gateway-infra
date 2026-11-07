@@ -120,7 +120,7 @@ The internal load balancer it targets is the one fixed cost (~$0.02/hr). It belo
 ```bash
 make -C ../authorizer zip
 terraform init -backend=false && terraform validate
-terraform test     # 6 tests with a mocked AWS provider, using ../../routes-repo/routes.yaml
+terraform test     # 10 tests with a mocked AWS provider (edge.tftest.hcl + routes.tftest.hcl)
 ```
 
 ## Notes
