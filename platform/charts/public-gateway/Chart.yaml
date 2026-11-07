@@ -1,0 +1,5 @@
+apiVersion: v2
+name: public-gateway
+description: GatewayClass, EnvoyProxy, Gateway "public-gateway" and the TargetGroupBinding that feeds the Terraform-made internal NLB.
+type: application
+version: 0.1.0

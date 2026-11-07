@@ -1,0 +1,58 @@
+{{- if not .Values.targetGroupArn }}{{ fail "targetGroupArn is required" }}{{ end }}
+# How Envoy proxies for this class are deployed: a ClusterIP Service with a FIXED name, so the
+# TargetGroupBinding below can find it. ClusterIP = no cloud load balancer is created by Kubernetes.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: {{ .Values.gatewayName }}-proxy
+  namespace: {{ .Values.gatewayNamespace }}
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyService:
+        name: {{ .Values.envoyServiceName }}
+        type: ClusterIP
+      envoyDeployment:
+        replicas: 1
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: envoy
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+  parametersRef:
+    group: gateway.envoyproxy.io
+    kind: EnvoyProxy
+    name: {{ .Values.gatewayName }}-proxy
+    namespace: {{ .Values.gatewayNamespace }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ .Values.gatewayName }}
+  namespace: {{ .Values.gatewayNamespace }}
+spec:
+  gatewayClassName: envoy
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: {{ .Values.listenerPort }}
+      allowedRoutes:
+        namespaces:
+          from: All   # HTTPRoutes live in app namespaces (e.g. orders) and attach here via parentRefs
+---
+# Registers the Envoy pods' IPs in the Terraform-created NLB target group, and keeps them in sync as pods change.
+# Must live in the same namespace as the Envoy Service.
+apiVersion: elbv2.k8s.aws/v1beta1
+kind: TargetGroupBinding
+metadata:
+  name: {{ .Values.gatewayName }}-nlb
+  namespace: {{ .Values.envoyNamespace }}
+spec:
+  serviceRef:
+    name: {{ .Values.envoyServiceName }}
+    port: {{ .Values.listenerPort }}
+  targetGroupARN: {{ .Values.targetGroupArn | quote }}
+  targetType: ip

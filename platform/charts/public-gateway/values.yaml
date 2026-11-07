@@ -1,0 +1,7 @@
+# All set by Terraform (platform/helm.tf).
+gatewayName: public-gateway
+gatewayNamespace: gateway-system
+listenerPort: 80
+envoyNamespace: envoy-gateway-system
+envoyServiceName: public-gateway-envoy
+targetGroupArn: ""   # required
