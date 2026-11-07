@@ -1,0 +1,4 @@
+.terraform/
+*.tfstate.backup
+crash.log
+# terraform.tfstate is NOT ignored: commit it, it's the only record of the backend resources.

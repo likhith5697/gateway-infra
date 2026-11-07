@@ -1,0 +1,4 @@
+# Copy to backend.hcl and fill in from: (cd ../bootstrap && terraform output)
+bucket         = "gateway-tfstate-<account-id>-us-east-2"
+region         = "us-east-2"
+dynamodb_table = "gateway-tf-locks"
