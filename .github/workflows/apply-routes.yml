@@ -1,0 +1,256 @@
+# Applies routes-repo changes to the edge stack.
+#
+#   routes-repo merge ─► repository_dispatch "trigger-apply" {repo, sha}
+#     verify  : payload must come from likhith5697/routes-repo; take ONLY the SHA, and it must be merged on main
+#     plan    : checkout routes-repo@SHA, re-validate with platform-templates@v0.1.0, terraform plan
+#               (encrypted plan artifact + readable job summary)
+#     apply   : environment "production" (manual approval) → apply exactly that saved plan
+#
+# repository_dispatch always runs this file from gateway-infra's default branch, so the workflow code is trusted;
+# only the payload comes from outside, and it's treated as untrusted input.
+
+name: apply-routes
+
+on:
+  repository_dispatch:
+    types: [trigger-apply] # sent by platform-templates/.github/workflows/trigger-apply.yml
+
+permissions:
+  contents: read
+
+# One edge change at a time; never cancel a run that may be mid-apply.
+concurrency:
+  group: edge-apply
+  cancel-in-progress: false
+
+env:
+  ROUTES_REPO: likhith5697/routes-repo
+  PLATFORM_TEMPLATES_REF: v0.1.0
+  PLATFORM_TEMPLATES_SHA: 7e47be20fa9aa5bb75f499516d1e82dd1eb10c6f # the commit v0.1.0 points at; guards against a moved tag
+  TF_VERSION: 1.14.6
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  AWS_REGION: us-east-2
+  # Remote state (same bucket/table as cluster/; not secret)
+  TF_BACKEND_BUCKET: gateway-tfstate-923832452634-us-east-2
+  TF_BACKEND_TABLE: gateway-tf-locks
+
+jobs:
+  # ---------------------------------------------------------------------------
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.payload.outputs.sha }}
+    steps:
+      - name: Accept payload only from routes-repo; keep only the SHA
+        id: payload
+        env:
+          # Passed through env, never interpolated into the script: payload values can't inject shell code.
+          PAYLOAD_REPO: ${{ github.event.client_payload.repo }}
+          PAYLOAD_SHA: ${{ github.event.client_payload.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$PAYLOAD_REPO" != "$ROUTES_REPO" ]; then
+            echo "::error::Rejected: payload repo is not $ROUTES_REPO"
+            exit 1
+          fi
+          if ! [[ "$PAYLOAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Rejected: payload sha is not a full 40-character commit SHA"
+            exit 1
+          fi
+          echo "sha=$PAYLOAD_SHA" >> "$GITHUB_OUTPUT"
+          echo "Accepted $ROUTES_REPO@$PAYLOAD_SHA"
+
+  # ---------------------------------------------------------------------------
+  plan:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Plan-time secrets (read access + state lock). No approval needed to *plan*.
+    environment: plan
+    outputs:
+      has_changes: ${{ steps.plan.outputs.has_changes }}
+    env:
+      ROUTES_SHA: ${{ needs.verify.outputs.sha }}
+    steps:
+      - name: Checkout gateway-infra (Terraform code)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Checkout routes-repo at the exact SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: likhith5697/routes-repo
+          ref: ${{ needs.verify.outputs.sha }}
+          path: routes-repo
+          fetch-depth: 0 # full history, to prove the SHA is on main
+          persist-credentials: false
+
+      - name: Require the SHA to be merged into routes-repo main
+        run: |
+          set -euo pipefail
+          test "$(git -C routes-repo rev-parse HEAD)" = "$ROUTES_SHA"
+          if ! git -C routes-repo merge-base --is-ancestor "$ROUTES_SHA" origin/main; then
+            echo "::error::Rejected: $ROUTES_SHA is not on routes-repo main (unmerged branch or fork commit)"
+            exit 1
+          fi
+
+      - name: Checkout platform-templates at v0.1.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: likhith5697/platform-templates
+          ref: ${{ env.PLATFORM_TEMPLATES_REF }}
+          path: platform-templates
+          persist-credentials: false
+
+      - name: Verify v0.1.0 still points at the expected commit
+        run: test "$(git -C platform-templates rev-parse HEAD)" = "$PLATFORM_TEMPLATES_SHA"
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Re-validate routes (never trust the caller's CI)
+        run: |
+          pip install --quiet -r platform-templates/requirements.txt
+          python platform-templates/validate_routes.py routes-repo/routes.yaml
+
+      - name: Build authorizer zip
+        run: make -C authorizer zip
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: terraform init
+        working-directory: edge
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          terraform init \
+            -backend-config="bucket=$TF_BACKEND_BUCKET" \
+            -backend-config="region=$AWS_REGION" \
+            -backend-config="dynamodb_table=$TF_BACKEND_TABLE"
+
+      - name: terraform plan
+        id: plan
+        working-directory: edge
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          TF_VAR_routes_file: ${{ github.workspace }}/routes-repo/routes.yaml
+          TF_VAR_vpc_id: ${{ vars.VPC_ID }}
+          TF_VAR_vpc_link_subnet_ids: ${{ vars.VPC_LINK_SUBNET_IDS }} # JSON list, e.g. ["subnet-a","subnet-b"]
+          TF_VAR_internal_listener_arn: ${{ vars.INTERNAL_LISTENER_ARN }}
+          TF_VAR_jwt_issuer: ${{ vars.JWT_ISSUER }}
+          TF_VAR_jwt_secret: ${{ secrets.JWT_SECRET }}
+          TF_VAR_enable_custom_domain: ${{ vars.ENABLE_CUSTOM_DOMAIN || 'false' }}
+          TF_VAR_domain_name: ${{ vars.DOMAIN_NAME }}
+        run: |
+          set +e
+          terraform plan -out=tfplan -detailed-exitcode -no-color
+          code=$?
+          set -e
+          # 0 = no changes, 2 = changes, anything else = error
+          case "$code" in
+            0) echo "has_changes=false" >> "$GITHUB_OUTPUT" ;;
+            2) echo "has_changes=true"  >> "$GITHUB_OUTPUT" ;;
+            *) exit "$code" ;;
+          esac
+
+      - name: Plan → job summary
+        working-directory: edge
+        run: |
+          terraform show -no-color tfplan > plan.txt   # sensitive values print as (sensitive value)
+          {
+            echo "## Edge plan for \`$ROUTES_REPO@${ROUTES_SHA:0:12}\`"
+            echo
+            echo "Changes: **${{ steps.plan.outputs.has_changes }}**. Approve the \`apply\` job to apply exactly this plan."
+            echo
+            echo '```hcl'
+            head -c 60000 plan.txt
+            echo
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # The saved plan contains every variable value, INCLUDING jwt_secret, in plain text.
+      # Artifacts on a public repo can be downloaded by anyone, so encrypt before uploading.
+      - name: Bundle and encrypt plan
+        env:
+          PLAN_ENCRYPTION_KEY: ${{ secrets.PLAN_ENCRYPTION_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$PLAN_ENCRYPTION_KEY" || { echo "::error::PLAN_ENCRYPTION_KEY secret is missing"; exit 1; }
+          # Apply needs the plan, the exact zip it hashed, and the provider lock file.
+          tar -czf plan-bundle.tgz edge/tfplan edge/.terraform.lock.hcl authorizer/build/authorizer.zip
+          openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:PLAN_ENCRYPTION_KEY \
+            -in plan-bundle.tgz -out plan-bundle.tgz.enc
+          rm -f plan-bundle.tgz edge/tfplan
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: edge-plan-${{ github.run_id }}
+          path: plan-bundle.tgz.enc
+          retention-days: 5
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  apply:
+    needs: [verify, plan]
+    if: needs.plan.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Required reviewers are configured on this environment: the job waits here for a human.
+    environment: production
+    steps:
+      - name: Checkout gateway-infra (same commit as the plan job)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: edge-plan-${{ github.run_id }}
+
+      - name: Decrypt and unpack plan
+        env:
+          PLAN_ENCRYPTION_KEY: ${{ secrets.PLAN_ENCRYPTION_KEY }}
+        run: |
+          set -euo pipefail
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:PLAN_ENCRYPTION_KEY \
+            -in plan-bundle.tgz.enc -out plan-bundle.tgz
+          tar -xzf plan-bundle.tgz
+          rm -f plan-bundle.tgz plan-bundle.tgz.enc
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: terraform init
+        working-directory: edge
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          terraform init -lockfile=readonly \
+            -backend-config="bucket=$TF_BACKEND_BUCKET" \
+            -backend-config="region=$AWS_REGION" \
+            -backend-config="dynamodb_table=$TF_BACKEND_TABLE"
+
+      # No -var flags and no re-plan: Terraform applies exactly what was reviewed.
+      # If the state changed since the plan, Terraform refuses ("saved plan is stale").
+      - name: terraform apply (saved plan)
+        working-directory: edge
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: terraform apply -no-color tfplan
+
+      - name: Summary
+        run: |
+          echo "## Applied edge plan for \`$ROUTES_REPO@${{ needs.verify.outputs.sha }}\`" >> "$GITHUB_STEP_SUMMARY"

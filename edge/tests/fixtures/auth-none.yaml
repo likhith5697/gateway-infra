@@ -1,0 +1,2 @@
+routes:
+  - {name: open, path: /open, method: GET, namespace: orders, service: orders, port: 8080, auth: none}

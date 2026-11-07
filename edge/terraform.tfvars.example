@@ -1,0 +1,16 @@
+# Copy to terraform.tfvars (gitignored) and fill in.
+routes_file = "../../routes-repo/routes.yaml"
+
+# From the cluster session:
+vpc_id                = "vpc-0123456789abcdef0"
+vpc_link_subnet_ids   = ["subnet-0aaaaaaaaaaaaaaaa", "subnet-0bbbbbbbbbbbbbbbb"]
+internal_listener_arn = "arn:aws:elasticloadbalancing:us-east-2:923832452634:listener/app/<name>/<id>/<id>"
+
+jwt_issuer = "https://auth.example.local"
+# jwt_secret: generate with  python -c "import secrets; print(secrets.token_urlsafe(48))"
+jwt_secret = "<at-least-32-random-characters>"
+
+# Optional custom domain (default off -> execute-api URL is used):
+# enable_custom_domain = true
+# domain_name          = "example.com"
+# create_hosted_zone   = false
