@@ -5,3 +5,6 @@ crash.log
 *.tfvars
 tfplan
 *.tfplan
+
+# Isolated Helm repo config/cache (provider "helm" in versions.tf)
+.helm/

@@ -34,6 +34,11 @@ provider "aws" {
 
 # Helm talks to the cluster created by ../cluster, using a short-lived token from your AWS credentials.
 provider "helm" {
+  # Isolated Helm repo config/cache for this stack, so a stale entry in the machine's global
+  # ~/.config/helm/repositories.yaml (e.g. a repo whose index was deleted) can't break chart lookups.
+  repository_config_path = "${path.module}/.helm/repositories.yaml"
+  repository_cache       = "${path.module}/.helm/cache"
+
   kubernetes = {
     host                   = data.aws_eks_cluster.this.endpoint
     cluster_ca_certificate = base64decode(data.aws_eks_cluster.this.certificate_authority[0].data)

@@ -51,6 +51,10 @@ module "eks" {
   # Gives whoever runs terraform apply cluster-admin access.
   enable_cluster_creator_admin_permissions = true
 
+  # No IRSA: it needs an IAM OIDC provider, which this free-plan account's SCP denies
+  # (iam:CreateOpenIDConnectProvider). Pods get AWS credentials via EKS Pod Identity instead (see ../platform).
+  enable_irsa = false
+
   # Cost savers: no control-plane log group, no customer-managed KMS key ($1/month).
   enabled_log_types           = []
   create_cloudwatch_log_group = false
