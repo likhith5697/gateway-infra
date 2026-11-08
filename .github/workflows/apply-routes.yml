@@ -185,8 +185,11 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$PLAN_ENCRYPTION_KEY" || { echo "::error::PLAN_ENCRYPTION_KEY secret is missing"; exit 1; }
-          # Apply needs the plan, the exact zip it hashed, and the provider lock file.
-          tar -czf plan-bundle.tgz edge/tfplan edge/.terraform.lock.hcl authorizer/build/authorizer.zip
+          # Apply needs the plan, the exact zip it hashed, the provider lock file, AND the reviewed routes.yaml:
+          # Terraform re-evaluates file(var.routes_file) during apply, at the same path the plan used
+          # ($GITHUB_WORKSPACE/routes-repo/routes.yaml; the apply job never checks out routes-repo itself).
+          tar -czf plan-bundle.tgz edge/tfplan edge/.terraform.lock.hcl authorizer/build/authorizer.zip \
+            routes-repo/routes.yaml
           openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:PLAN_ENCRYPTION_KEY \
             -in plan-bundle.tgz -out plan-bundle.tgz.enc
           rm -f plan-bundle.tgz edge/tfplan

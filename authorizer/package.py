@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build a reproducible Lambda zip: same source in -> byte-identical zip out.
 
-Fixed timestamps and file modes mean Terraform's source_code_hash only changes when the code changes,
+Fixed timestamps, file modes, LF line endings and no compression mean Terraform's source_code_hash only changes when the code changes,
 regardless of machine, OS or checkout time.
 
 Usage: python package.py <output.zip> <file> [<file> ...]
@@ -15,11 +15,15 @@ FIXED_TIME = (1980, 1, 1, 0, 0, 0)  # earliest timestamp the zip format supports
 
 def build(out: Path, files: list[Path]) -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
+    # ZIP_STORED (no compression): deflate output differs between zlib builds (e.g. Windows vs Linux
+    # Python), which made the same handler.py hash differently locally and in CI. Stored bytes are identical
+    # everywhere; the handler is only a few KB, so size doesn't matter.
+    with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_STORED) as zf:
         for f in sorted(files, key=lambda p: p.name):
             info = zipfile.ZipInfo(f.name, date_time=FIXED_TIME)  # flat: handler.py at zip root
-            info.external_attr = 0o644 << 16                       # -rw-r--r--
-            info.compress_type = zipfile.ZIP_DEFLATED
+            info.create_system = 3                                 # "made on Unix": Python defaults to 0 on Windows, 3 elsewhere
+            info.external_attr = 0o644 << 16                       # -rw-r--r-- (Unix mode bits, valid because create_system=3)
+            info.compress_type = zipfile.ZIP_STORED
             # Normalise CRLF -> LF so a Windows checkout produces the same zip as Linux.
             zf.writestr(info, f.read_bytes().replace(b"\r\n", b"\n"))
 
