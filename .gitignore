@@ -37,3 +37,6 @@ __pycache__/
 *.pem
 *.key
 .DS_Store
+
+# Local command logs (terraform plan/apply output)
+*.log

@@ -117,6 +117,19 @@ jobs:
           pip install --quiet -r platform-templates/requirements.txt
           python platform-templates/validate_routes.py routes-repo/routes.yaml
 
+      # Review both layers before approving: API Gateway (terraform plan, below) and Envoy (these HTTPRoutes).
+      - name: Render HTTPRoutes → job summary (applied by the apply job)
+        run: |
+          set -euo pipefail
+          python platform-templates/render_httproutes.py routes-repo/routes.yaml -o rendered-httproutes.yaml
+          {
+            echo "## HTTPRoutes the apply job will kubectl-apply ($(grep -c '^kind: HTTPRoute$' rendered-httproutes.yaml))"
+            echo
+            echo '```yaml'
+            cat rendered-httproutes.yaml
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Build authorizer zip
         run: make -C authorizer zip
 
@@ -253,6 +266,41 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: terraform apply -no-color tfplan
+
+      # --- Envoy side: the same reviewed routes.yaml (from the plan bundle) becomes HTTPRoutes in the cluster ---
+      - name: Checkout platform-templates at v0.1.0 (renderer)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: likhith5697/platform-templates
+          ref: ${{ env.PLATFORM_TEMPLATES_REF }}
+          path: platform-templates
+          persist-credentials: false
+
+      - name: Verify v0.1.0 still points at the expected commit
+        run: test "$(git -C platform-templates rev-parse HEAD)" = "$PLATFORM_TEMPLATES_SHA"
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      # The CI user is mapped (EKS access entry) to a group that may only manage HTTPRoutes.
+      - name: Apply HTTPRoutes to the cluster
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          PLATFORM_TEMPLATES: platform-templates
+          CLUSTER_NAME: gateway
+        run: |
+          set -euo pipefail
+          pip install --quiet -r platform-templates/requirements.txt
+          aws eks update-kubeconfig --region "$AWS_REGION" --name "$CLUSTER_NAME"
+          scripts/apply-httproutes.sh routes-repo/routes.yaml
+          {
+            echo "## HTTPRoutes in the cluster (managed-by=routes-repo)"
+            echo '```'
+            kubectl get httproute -A -l managed-by=routes-repo
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Summary
         run: |

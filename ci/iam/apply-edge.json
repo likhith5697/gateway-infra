@@ -4,25 +4,43 @@
     {
       "Sid": "StateReadWrite",
       "Effect": "Allow",
-      "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+      "Action": [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject"
+      ],
       "Resource": "arn:aws:s3:::gateway-tfstate-923832452634-us-east-2/*"
     },
     {
       "Sid": "StateList",
       "Effect": "Allow",
-      "Action": ["s3:ListBucket", "s3:GetBucketVersioning"],
+      "Action": [
+        "s3:ListBucket",
+        "s3:GetBucketVersioning"
+      ],
       "Resource": "arn:aws:s3:::gateway-tfstate-923832452634-us-east-2"
     },
     {
       "Sid": "StateLock",
       "Effect": "Allow",
-      "Action": ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:DeleteItem", "dynamodb:DescribeTable"],
+      "Action": [
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:DescribeTable"
+      ],
       "Resource": "arn:aws:dynamodb:us-east-2:923832452634:table/gateway-tf-locks"
     },
     {
       "Sid": "ApiGatewayUsEast2",
       "Effect": "Allow",
-      "Action": ["apigateway:GET", "apigateway:POST", "apigateway:PUT", "apigateway:PATCH", "apigateway:DELETE"],
+      "Action": [
+        "apigateway:GET",
+        "apigateway:POST",
+        "apigateway:PUT",
+        "apigateway:PATCH",
+        "apigateway:DELETE"
+      ],
       "Resource": "arn:aws:apigateway:us-east-2::/*"
     },
     {
@@ -30,21 +48,37 @@
       "Effect": "Allow",
       "Action": "iam:CreateServiceLinkedRole",
       "Resource": "arn:aws:iam::923832452634:role/aws-service-role/ops.apigateway.amazonaws.com/*",
-      "Condition": { "StringEquals": { "iam:AWSServiceName": "ops.apigateway.amazonaws.com" } }
+      "Condition": {
+        "StringEquals": {
+          "iam:AWSServiceName": "ops.apigateway.amazonaws.com"
+        }
+      }
     },
     {
       "Sid": "AuthorizerLambda",
       "Effect": "Allow",
-      "Action": ["lambda:*"],
+      "Action": [
+        "lambda:*"
+      ],
       "Resource": "arn:aws:lambda:us-east-2:923832452634:function:gateway-*"
     },
     {
       "Sid": "AuthorizerRoleOnlyGatewayPrefix",
       "Effect": "Allow",
       "Action": [
-        "iam:CreateRole", "iam:DeleteRole", "iam:GetRole", "iam:UpdateRole", "iam:UpdateAssumeRolePolicy",
-        "iam:PutRolePolicy", "iam:DeleteRolePolicy", "iam:GetRolePolicy", "iam:ListRolePolicies",
-        "iam:ListAttachedRolePolicies", "iam:ListInstanceProfilesForRole", "iam:TagRole", "iam:UntagRole"
+        "iam:CreateRole",
+        "iam:DeleteRole",
+        "iam:GetRole",
+        "iam:UpdateRole",
+        "iam:UpdateAssumeRolePolicy",
+        "iam:PutRolePolicy",
+        "iam:DeleteRolePolicy",
+        "iam:GetRolePolicy",
+        "iam:ListRolePolicies",
+        "iam:ListAttachedRolePolicies",
+        "iam:ListInstanceProfilesForRole",
+        "iam:TagRole",
+        "iam:UntagRole"
       ],
       "Resource": "arn:aws:iam::923832452634:role/gateway-*"
     },
@@ -53,12 +87,18 @@
       "Effect": "Allow",
       "Action": "iam:PassRole",
       "Resource": "arn:aws:iam::923832452634:role/gateway-authorizer",
-      "Condition": { "StringEquals": { "iam:PassedToService": "lambda.amazonaws.com" } }
+      "Condition": {
+        "StringEquals": {
+          "iam:PassedToService": "lambda.amazonaws.com"
+        }
+      }
     },
     {
       "Sid": "AuthorizerLogs",
       "Effect": "Allow",
-      "Action": ["logs:*"],
+      "Action": [
+        "logs:*"
+      ],
       "Resource": [
         "arn:aws:logs:us-east-2:923832452634:log-group:/aws/lambda/gateway-*",
         "arn:aws:logs:us-east-2:923832452634:log-group:/aws/lambda/gateway-*:*"
@@ -67,44 +107,84 @@
     {
       "Sid": "LogsDescribe",
       "Effect": "Allow",
-      "Action": ["logs:DescribeLogGroups", "logs:ListTagsForResource"],
+      "Action": [
+        "logs:DescribeLogGroups",
+        "logs:ListTagsForResource"
+      ],
       "Resource": "*"
     },
     {
       "Sid": "VpcLinkSecurityGroup",
       "Effect": "Allow",
       "Action": [
-        "ec2:CreateSecurityGroup", "ec2:DeleteSecurityGroup", "ec2:AuthorizeSecurityGroupEgress",
-        "ec2:RevokeSecurityGroupEgress", "ec2:AuthorizeSecurityGroupIngress", "ec2:RevokeSecurityGroupIngress",
-        "ec2:CreateTags", "ec2:DeleteTags"
+        "ec2:CreateSecurityGroup",
+        "ec2:DeleteSecurityGroup",
+        "ec2:AuthorizeSecurityGroupEgress",
+        "ec2:RevokeSecurityGroupEgress",
+        "ec2:AuthorizeSecurityGroupIngress",
+        "ec2:RevokeSecurityGroupIngress",
+        "ec2:CreateTags",
+        "ec2:DeleteTags"
       ],
       "Resource": "*",
-      "Condition": { "StringEquals": { "aws:RequestedRegion": "us-east-2" } }
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": "us-east-2"
+        }
+      }
     },
     {
       "Sid": "VpcLinkEnis",
       "Effect": "Allow",
-      "Action": ["ec2:CreateNetworkInterface", "ec2:DeleteNetworkInterface", "ec2:CreateNetworkInterfacePermission"],
+      "Action": [
+        "ec2:CreateNetworkInterface",
+        "ec2:DeleteNetworkInterface",
+        "ec2:CreateNetworkInterfacePermission"
+      ],
       "Resource": "*",
-      "Condition": { "StringEquals": { "aws:RequestedRegion": "us-east-2" } }
+      "Condition": {
+        "StringEquals": {
+          "aws:RequestedRegion": "us-east-2"
+        }
+      }
     },
     {
       "Sid": "Ec2Describe",
       "Effect": "Allow",
-      "Action": ["ec2:Describe*", "elasticloadbalancing:Describe*", "sts:GetCallerIdentity"],
+      "Action": [
+        "ec2:Describe*",
+        "elasticloadbalancing:Describe*",
+        "sts:GetCallerIdentity"
+      ],
       "Resource": "*"
     },
     {
       "Sid": "OptionalCustomDomain",
       "Effect": "Allow",
       "Action": [
-        "acm:RequestCertificate", "acm:DeleteCertificate", "acm:DescribeCertificate", "acm:ListCertificates",
-        "acm:ListTagsForCertificate", "acm:AddTagsToCertificate",
-        "route53:ListHostedZones", "route53:GetHostedZone", "route53:ListResourceRecordSets",
-        "route53:ChangeResourceRecordSets", "route53:GetChange", "route53:ListTagsForResource",
-        "route53:CreateHostedZone", "route53:DeleteHostedZone", "route53:ChangeTagsForResource"
+        "acm:RequestCertificate",
+        "acm:DeleteCertificate",
+        "acm:DescribeCertificate",
+        "acm:ListCertificates",
+        "acm:ListTagsForCertificate",
+        "acm:AddTagsToCertificate",
+        "route53:ListHostedZones",
+        "route53:GetHostedZone",
+        "route53:ListResourceRecordSets",
+        "route53:ChangeResourceRecordSets",
+        "route53:GetChange",
+        "route53:ListTagsForResource",
+        "route53:CreateHostedZone",
+        "route53:DeleteHostedZone",
+        "route53:ChangeTagsForResource"
       ],
       "Resource": "*"
+    },
+    {
+      "Sid": "KubeconfigForHttpRoutes",
+      "Effect": "Allow",
+      "Action": "eks:DescribeCluster",
+      "Resource": "arn:aws:eks:us-east-2:923832452634:cluster/gateway"
     }
   ]
 }

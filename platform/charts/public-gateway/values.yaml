@@ -5,3 +5,4 @@ listenerPort: 80
 envoyNamespace: envoy-gateway-system
 envoyServiceName: public-gateway-envoy
 targetGroupArn: ""   # required
+ciRoutesGroup: ""   # set by Terraform; empty = no CI RBAC

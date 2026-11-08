@@ -54,3 +54,17 @@ variable "envoy_container_port" {
   type        = number
   default     = 10080
 }
+
+# --- CI access (apply-routes workflow applies HTTPRoutes) ---------------------------------------------
+
+variable "ci_apply_user_arn" {
+  description = "IAM user the apply-routes workflow uses (created by ci/setup-ci.sh)."
+  type        = string
+  default     = "arn:aws:iam::923832452634:user/gateway-ci-apply"
+}
+
+variable "ci_routes_group" {
+  description = "Kubernetes group the CI user is mapped to; bound to an HTTPRoute-only ClusterRole."
+  type        = string
+  default     = "gateway-routes-applier"
+}

@@ -54,6 +54,7 @@ resource "helm_release" "public_gateway" {
     envoyNamespace   = local.envoy_namespace
     envoyServiceName = local.envoy_service_name
     targetGroupArn   = aws_lb_target_group.envoy.arn
+    ciRoutesGroup    = var.ci_routes_group
   })]
 
   # Destroy order matters too: this release (and its TargetGroupBinding) is removed BEFORE the controller,

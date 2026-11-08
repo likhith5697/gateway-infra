@@ -1,0 +1,25 @@
+{{- if .Values.ciRoutesGroup }}
+# HTTPRoute-only permissions for the apply-routes CI user (EKS access entry -> group {{ .Values.ciRoutesGroup }}).
+# Cluster-wide because routes.yaml can target any app namespace; it covers ONLY HTTPRoute objects.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: gateway-routes-applier
+rules:
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["httproutes"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: gateway-routes-applier
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: gateway-routes-applier
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: {{ .Values.ciRoutesGroup | quote }}
+{{- end }}
